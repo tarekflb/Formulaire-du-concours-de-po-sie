@@ -1126,7 +1126,8 @@
 </main>
 
 <script>
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbywBlhKEe-9-KJR2Yvbocub4hhGZ9plWKdbiAUfAjH_3LumIGkrQo1P0AWyj8YeYup8/exec';
+  const SUPABASE_URL = 'https://msgzczlelswoczkengws.supabase.co';
+  const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/submit-haiku`;
 
 function selectTheme(card) {
   document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
@@ -1185,15 +1186,6 @@ uploadZone.addEventListener('drop', e => {
   }
 });
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 async function submitForm() {
   const prenom  = document.getElementById('prenom').value.trim();
   const nom     = document.getElementById('nom').value.trim();
@@ -1230,30 +1222,33 @@ async function submitForm() {
   btn.innerHTML = '<span style="opacity:0.7">Envoi en cours…</span>';
 
   try {
-    let fileData = null, fileName = null, fileMime = null;
+    const formData = new FormData();
+    formData.append('prenom', prenom);
+    formData.append('nom', nom);
+    formData.append('email', email);
+    formData.append('classe', document.getElementById('classe').value.trim());
+    formData.append('ligne1', l1);
+    formData.append('ligne2', l2);
+    formData.append('ligne3', l3);
+    formData.append('theme', theme.value);
+    formData.append('formats', [...formats].map(f => f.value).join(', '));
+    formData.append('intention', document.getElementById('intention').value.trim());
+    formData.append('consentement', document.getElementById('consent').checked);
+
     if (file) {
-      fileData = await fileToBase64(file);
-      fileName = file.name;
-      fileMime = file.type;
+      formData.append('file', file);
     }
 
-    const payload = {
-      prenom, nom, email,
-      classe:       document.getElementById('classe').value.trim(),
-      ligne1: l1, ligne2: l2, ligne3: l3,
-      theme:        theme.value,
-      formats:      [...formats].map(f => f.value).join(', '),
-      intention:    document.getElementById('intention').value.trim(),
-      consentement: document.getElementById('consent').checked ? 'Oui' : 'Non',
-      fileData, fileName, fileMime,
-    };
-
-    await fetch(SCRIPT_URL, {
-      method:  'POST',
-      mode:    'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
+    const response = await fetch(EDGE_FUNCTION_URL, {
+      method: 'POST',
+      body: formData,
     });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Erreur lors de l\'envoi');
+    }
 
     showSuccess(l1, l2, l3);
 
